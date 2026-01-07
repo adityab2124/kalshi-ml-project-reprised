@@ -7,7 +7,7 @@ from datetime import datetime
 import time
 
 EXCHANGE_API_BASE = "https://demo-api.kalshi.co/trade-api/v2"
-KEY_ID = "cc76eee9-dba9-4bf2-a06f-eddf6a44a8e1"
+KEY_ID = os.getenv("KALSHI_KEY_ID")
 PRIVATE_KEY_PATH = "private_key.pem"
 
 TRADES_LIMIT = 500   # small on purpose → fast
