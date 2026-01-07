@@ -11,10 +11,9 @@ import json
 # ===== CONFIGURATION =====
 # Replace these with your actual credentials
 EXCHANGE_API_BASE = "https://demo-api.kalshi.co/trade-api/v2"  # or "https://api.elections.kalshi.com/trade-api/v2" for prod
-KEY_ID = "cc76eee9-dba9-4bf2-a06f-eddf6a44a8e1"
 
-# Load private key from PEM file
-PRIVATE_KEY_PATH = "private_key.pem"  # Private key file in same directory
+KEY_ID = os.getenv("KALSHI_KEY_ID")
+PRIVATE_KEY_PATH = os.getenv("KALSHI_PRIVATE_KEY_PATH", "private_key.pem")
 
 
 
