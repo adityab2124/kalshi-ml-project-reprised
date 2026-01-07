@@ -17,8 +17,8 @@ import time
 
 # ===== CONFIGURATION =====
 EXCHANGE_API_BASE = "https://demo-api.kalshi.co/trade-api/v2"
-KEY_ID = "cc76eee9-dba9-4bf2-a06f-eddf6a44a8e1"
-PRIVATE_KEY_PATH = "private_key.pem"
+KEY_ID = os.getenv("KALSHI_KEY_ID")
+PRIVATE_KEY_PATH = os.getenv("KALSHI_PRIVATE_KEY_PATH", "private_key.pem")
 CUTOFF_HOURS_BEFORE_CLOSE = 6  # Cutoff = close_time - 6 hours
 TRADES_WINDOW_HOURS = 24  # Fetch trades in [cutoff - 24h, close_time]
 TARGET_MARKETS = 300
