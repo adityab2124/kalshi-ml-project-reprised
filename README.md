@@ -1,1 +1,3 @@
-# kalshi-ml-project-reprised
+# kalshi-ml-project-reprised 
+
+1) sports betting
