@@ -1,14 +1,45 @@
 # kalshi-ml-project-reprised 
-1/15 update 
-What needs further work (next):
+1/16 update 
 
+pipeline flow idea: 
 
-Manually seed known mention families (e.g., KXTRUMPMENTION-, KXEARNINGSMENTION-) because these markets reuse the same prefix across dates; this guarantees non-zero results and validates tracking over time.
+Goal: turn raw market data into high-signal Slack alerts that are actually worth reading.
 
+Core ideas (brief):
 
-Then generalize discovery by expanding prefix rules once seeded flows are stable and producing data.
+Add change detection (compare current vs last snapshot)
 
+Set alert thresholds (ignore small/noisy moves)
 
-Why this step:
-It converts the project from “infrastructure works” to “ can reliably pull and track real mention markets,” which is the core objective before any modeling or trading logic.
+Reduce noise (rate-limit, dedupe, one alert per real move)
 
+Make Slack alerts concise + contextual, not spammy
+
+Pipeline (simple):
+
+Snapshot prices every N minutes
+
+Compare to previous snapshot
+
+If threshold hit:
+
+Log alert to SQL
+
+Pull recent context (news/search)
+
+Post Slack alert with:
+
+What changed
+
+Why it might matter
+
+Link to market
+
+Slack stays read-only but intelligent.
+
+Example alert:
+
+⚠️ Price spike detected on TikTok (+18% in 30 min)
+Recent context:
+• Trump rally scheduled today in Ohio
+• TikTok ban hearing trending on Google (this is where we get an alert and if a tiktok hearing is indeed happening, we put yes on tiktok being mentioned before most of the market does) 
