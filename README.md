@@ -3,6 +3,10 @@
 
 right now: it seems like pulling mention bet, then recording it through cache, sseeing price alert, which would trigger ai to pull news sources to pissibly what could cause this price spike. we validate possibly through just ourselves by double checking then order a bet. but after that process actually works, the ml can distingusih between bs and potential money makers, which wpuld make it better for us cuz we can do less manual checking . and then of course outcome modeling, but i think outcome modeling is whole other process given different types of markets, features, volatility etc 
 
+**so main goals: have slack messages be better and detailed cache price differences alert when price spikes or goes down noticeably search for reason, using ai tokens store these price spikes in sql and outcome as well so we can use this to train ml models**
+
+
+**In depth version**
 
 more in depth: 
 
