@@ -1,6 +1,11 @@
 # kalshi-ml-project-reprised 
 1/16 update 
 
+right now: it seems like pulling mention bet, then recording it through cache, sseeing price alert, which would trigger ai to pull news sources to pissibly what could cause this price spike. we validate possibly through just ourselves by double checking then order a bet. but after that process actually works, the ml can distingusih between bs and potential money makers, which wpuld make it better for us cuz we can do less manual checking . and then of course outcome modeling, but i think outcome modeling is whole other process given different types of markets, features, volatility etc 
+
+
+more in depth: 
+
 pipeline flow idea: 
 
 Goal: turn raw market data into high-signal Slack alerts that are actually worth reading.
