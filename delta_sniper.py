@@ -9,7 +9,7 @@ Uses SQLite for caching and cooldown management.
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from p import ExchangeClient
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
@@ -76,58 +76,72 @@ def init_database(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def get_market_price(client: ExchangeClient, ticker: str) -> Optional[float]:
+def discover_contracts_for_event(client: ExchangeClient, event_ticker: str) -> List[Dict]:
     """
-    Fetch current price for a market ticker from Kalshi API.
+    Discover all contracts (markets) for a given event ticker.
     
     Args:
         client: ExchangeClient instance
-        ticker: Market ticker (e.g., "KXTRUMPSAY-26JAN19-IQ" for specific contract,
-                or "KXTRUMPSAY-26JAN19" for event - will use best price)
+        event_ticker: Event ticker (e.g., "KXTRUMPSAY-26JAN19")
     
     Returns:
-        Current price (0-1) or None if fetch fails
+        List of dictionaries with 'ticker' and 'yes_sub_title' (contract name)
     """
     try:
-        # If it's a full contract ticker (contains two or more dashes), get that specific market
-        if ticker.count('-') >= 2:
-            # Try get_market() first for specific ticker
-            try:
-                market_data = client.get_market(ticker=ticker)
-                market = market_data.get('market', {})
-                price = market.get('yes_bid') or market.get('yes_ask') or market.get('last_price') or 0
-                if price > 0:
-                    # Convert from cents to decimal (0-1)
-                    return price / 100.0
-            except:
-                # Fallback to get_markets with tickers parameter
-                response = client.get_markets(tickers=ticker, limit=1)
-                markets = response.get('markets', [])
-                
-                if markets:
-                    market = markets[0]
-                    price = market.get('yes_bid') or market.get('yes_ask') or market.get('last_price') or 0
-                    if price > 0:
-                        # Convert from cents to decimal (0-1)
-                        return price / 100.0
+        response = client.get_markets(event_ticker=event_ticker, limit=100)
+        markets = response.get('markets', [])
         
-        # If it's an event ticker (contains one dash), get all markets for that event
-        elif ticker.count('-') == 1:
-            # Event ticker - get markets for this event and use best price
-            response = client.get_markets(event_ticker=ticker, limit=100)
+        contracts = []
+        for market in markets:
+            ticker = market.get('ticker', '')
+            yes_sub = market.get('yes_sub_title', 'Yes')
+            if ticker:
+                contracts.append({
+                    'ticker': ticker,
+                    'yes_sub_title': yes_sub
+                })
+        
+        return contracts
+    except Exception as e:
+        print(f"⚠️  Error discovering contracts for {event_ticker}: {e}")
+        return []
+
+
+def get_market_price(client: ExchangeClient, ticker: str) -> Optional[Tuple[float, str]]:
+    """
+    Fetch current price for a specific contract ticker from Kalshi API.
+    
+    Args:
+        client: ExchangeClient instance
+        ticker: Full contract ticker (e.g., "KXTRUMPSAY-26JAN19-IQ")
+    
+    Returns:
+        Tuple of (price, contract_name) or None if fetch fails
+        price: Current price (0-1)
+        contract_name: Human-readable name (e.g., "IQ", "Billionaire", "Trump")
+    """
+    try:
+        # Try get_market() first for specific ticker
+        try:
+            market_data = client.get_market(ticker=ticker)
+            market = market_data.get('market', {})
+            price = market.get('yes_bid') or market.get('yes_ask') or market.get('last_price') or 0
+            contract_name = market.get('yes_sub_title', ticker.split('-')[-1] if '-' in ticker else 'Yes')
+            if price > 0:
+                # Convert from cents to decimal (0-1)
+                return (price / 100.0, contract_name)
+        except:
+            # Fallback to get_markets with tickers parameter
+            response = client.get_markets(tickers=ticker, limit=1)
             markets = response.get('markets', [])
             
             if markets:
-                # Get the highest priced contract as the "event price"
-                best_price = 0
-                for market in markets:
-                    price = market.get('yes_bid') or market.get('yes_ask') or market.get('last_price') or 0
-                    if price > best_price:
-                        best_price = price
-                
-                if best_price > 0:
+                market = markets[0]
+                price = market.get('yes_bid') or market.get('yes_ask') or market.get('last_price') or 0
+                contract_name = market.get('yes_sub_title', ticker.split('-')[-1] if '-' in ticker else 'Yes')
+                if price > 0:
                     # Convert from cents to decimal (0-1)
-                    return best_price / 100.0
+                    return (price / 100.0, contract_name)
         
         return None
         
@@ -195,12 +209,13 @@ def update_cache(conn: sqlite3.Connection, ticker: str, price: float,
     conn.commit()
 
 
-def send_alert(ticker: str, old_price: float, new_price: float, change_pct: float):
+def send_alert(ticker: str, contract_name: str, old_price: float, new_price: float, change_pct: float):
     """
     Send alert for price spike detection.
     
     Args:
-        ticker: Market ticker
+        ticker: Market ticker (e.g., "KXBERNIEMENTION-26JAN20-BILL")
+        contract_name: Human-readable contract name (e.g., "Billionaire", "Trump")
         old_price: Previous price
         new_price: Current price
         change_pct: Percentage change (0.15 = 15%)
@@ -209,6 +224,7 @@ def send_alert(ticker: str, old_price: float, new_price: float, change_pct: floa
     print("\n" + "="*60)
     print("⚠️  SPIKE DETECTED ⚠️")
     print("="*60)
+    print(f"Contract: {contract_name}")
     print(f"Ticker: {ticker}")
     print(f"Old Price: ${old_price:.4f}")
     print(f"New Price: ${new_price:.4f}")
@@ -221,6 +237,7 @@ def send_alert(ticker: str, old_price: float, new_price: float, change_pct: floa
         try:
             slack_message = (
                 f"🚨 *Price Spike Detected*\n"
+                f"*Contract:* {contract_name}\n"
                 f"*Ticker:* {ticker}\n"
                 f"*Old Price:* ${old_price:.4f}\n"
                 f"*New Price:* ${new_price:.4f}\n"
@@ -253,22 +270,27 @@ def is_in_cooldown(cooldown_until: Optional[datetime]) -> bool:
     return now < cooldown_until
 
 
-def monitor_market(client: ExchangeClient, conn: sqlite3.Connection, ticker: str):
+def monitor_contract(client: ExchangeClient, conn: sqlite3.Connection, ticker: str, contract_name: str):
     """
-    Monitor a single market for price spikes.
+    Monitor a single contract for price spikes.
     
     Args:
         client: ExchangeClient instance
         conn: SQLite connection
-        ticker: Market ticker to monitor
+        ticker: Full contract ticker (e.g., "KXBERNIEMENTION-26JAN20-BILL")
+        contract_name: Human-readable contract name (e.g., "Billionaire")
     """
     try:
         # Get current price from API
-        current_price = get_market_price(client, ticker)
+        price_result = get_market_price(client, ticker)
         
-        if current_price is None:
+        if price_result is None:
             # Price fetch failed - skip this iteration
             return
+        
+        current_price, fetched_name = price_result
+        # Use fetched name if available, otherwise use provided name
+        contract_name = fetched_name if fetched_name else contract_name
         
         # Get cached price and cooldown status
         cached_result = get_cached_price(conn, ticker)
@@ -280,7 +302,7 @@ def monitor_market(client: ExchangeClient, conn: sqlite3.Connection, ticker: str
             update_cache(conn, ticker, current_price, cooldown_until)
             return
         
-        # If this is the first time we're seeing this market, just cache it
+        # If this is the first time we're seeing this contract, just cache it
         if last_price is None:
             update_cache(conn, ticker, current_price)
             return
@@ -291,8 +313,8 @@ def monitor_market(client: ExchangeClient, conn: sqlite3.Connection, ticker: str
             
             # Check for spike (15% or more increase)
             if change_pct >= SPIKE_THRESHOLD:
-                # Trigger alert
-                send_alert(ticker, last_price, current_price, change_pct)
+                # Trigger alert with contract name
+                send_alert(ticker, contract_name, last_price, current_price, change_pct)
                 
                 # Set cooldown (10 minutes from now)
                 cooldown_until = datetime.now(timezone.utc) + timedelta(seconds=COOLDOWN_SECONDS)
@@ -306,7 +328,7 @@ def monitor_market(client: ExchangeClient, conn: sqlite3.Connection, ticker: str
             
     except Exception as e:
         print(f"⚠️  Error monitoring {ticker}: {e}")
-        # Continue monitoring other markets even if one fails
+        # Continue monitoring other contracts even if one fails
 
 
 def test_alert():
@@ -318,7 +340,8 @@ def test_alert():
     
     # Send a test alert
     test_ticker = TARGET_MARKETS[0] if TARGET_MARKETS else "TEST-TICKER"
-    send_alert(test_ticker, 0.50, 0.60, 0.20)  # 20% spike
+    test_contract_name = "Billionaire"  # Example contract name
+    send_alert(test_ticker, test_contract_name, 0.50, 0.60, 0.20)  # 20% spike
     
     print("\n✓ Test alert sent. Check your Slack channel for the message.")
     print("If you don't see it, check:")
@@ -332,7 +355,7 @@ def main():
     print("="*60)
     print("DELTA SNIPER BOT - Kalshi Market Monitor")
     print("="*60)
-    print(f"Monitoring {len(TARGET_MARKETS)} markets")
+    print(f"Target events/markets: {len(TARGET_MARKETS)}")
     print(f"Spike threshold: {SPIKE_THRESHOLD*100}%")
     print(f"Polling interval: {POLL_INTERVAL} seconds")
     print(f"Cooldown period: {COOLDOWN_SECONDS} seconds ({COOLDOWN_SECONDS//60} minutes)")
@@ -356,15 +379,38 @@ def main():
         print(f"✗ Failed to connect to Kalshi API: {e}")
         return
     
+    # Discover all contracts to monitor
+    contracts_to_monitor = {}  # ticker -> contract_name mapping
+    
+    print("Discovering contracts to monitor...")
+    for target in TARGET_MARKETS:
+        # Check if it's an event ticker (one dash) or specific contract (two+ dashes)
+        if target.count('-') == 1:
+            # Event ticker - discover all contracts
+            print(f"  Discovering contracts for event: {target}")
+            contracts = discover_contracts_for_event(client, target)
+            for contract in contracts:
+                ticker = contract['ticker']
+                name = contract['yes_sub_title']
+                contracts_to_monitor[ticker] = name
+                print(f"    ✓ {name} ({ticker})")
+        else:
+            # Specific contract ticker - monitor directly
+            contracts_to_monitor[target] = target.split('-')[-1] if '-' in target else target
+            print(f"  ✓ Monitoring contract: {target}")
+    
+    total_contracts = len(contracts_to_monitor)
+    print(f"\n✓ Total contracts to monitor: {total_contracts}\n")
+    
     # Main monitoring loop
     iteration = 0
     try:
         while True:
             iteration += 1
-            print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}] Poll #{iteration} - Checking {len(TARGET_MARKETS)} markets...")
+            print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}] Poll #{iteration} - Checking {total_contracts} contracts...")
             
-            for ticker in TARGET_MARKETS:
-                monitor_market(client, conn, ticker)
+            for ticker, contract_name in contracts_to_monitor.items():
+                monitor_contract(client, conn, ticker, contract_name)
             
             # Wait 5 seconds before next poll
             time.sleep(POLL_INTERVAL)
