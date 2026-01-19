@@ -1,3 +1,4 @@
+scaling goes like: https://docs.google.com/spreadsheets/d/1rpYTXEB-waNgf1h_NyegB-TRW2ysbmxM6XNXwSfZwx0/edit?pli=1&gid=1186098886#gid=1186098886
  kalshi-ml-project-reprised 
 
 
