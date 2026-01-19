@@ -1,6 +1,24 @@
 scaling goes like: https://docs.google.com/spreadsheets/d/1rpYTXEB-waNgf1h_NyegB-TRW2ysbmxM6XNXwSfZwx0/edit?pli=1&gid=1186098886#gid=1186098886
  kalshi-ml-project-reprised 
 
+1/18 
+
+well right now, were focusing on speech markets becuase its just an area of focus. if i have proof of concept we can very much expand in the future. my goal is something like this:
+
+
+
+Example alert:
+
+⚠️ Price spike detected on TikTok (+18% in 30 min) Recent context: • Trump rally scheduled today in Ohio • TikTok ban hearing trending on Google (this is where we get an alert and if a tiktok hearing is indeed happening, we put yes on tiktok being mentioned before most of the market does) (this is a reactive method)
+
+
+in the future we can ask ai gpt token to quick search the internet and find alerts faster than anybody (this is a proactive method)
+
+i think a reactive method is much easier to implement right now
+
+
+
+but even with the reactive method, we have to constantly refresh odds on kalshi, like every minute. lets say a mention market lasts a week. and for that week, we have to refresh every minute , just to wait for that one moment where we see a price spike... whats ur thought ... brief answe
 
 1/16 update 
 
