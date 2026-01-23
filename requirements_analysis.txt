@@ -5,4 +5,5 @@ matplotlib>=3.7.0
 seaborn>=0.12.0
 slack-sdk>=1.0.0
 websocket-client>=1.0.0
+psycopg2-binary>=2.9.0
 

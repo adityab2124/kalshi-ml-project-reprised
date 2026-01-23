@@ -37,7 +37,8 @@ TARGET_MARKETS = [
     "KXTRUMPSAY-26JAN26",
     "KXBERNIEMENTION-26JAN20",
     "KXTRUMPMENTION-26JAN21",
-    "KXTRUMPMENTIONB-26JAN21"
+    "KXTRUMPMENTIONB-26JAN21",
+    "KXMAMDANIMENTION-26JAN24"
 ]
 
 # Price-tiered spike thresholds (filters penny stock noise)
@@ -47,6 +48,9 @@ PRICE_TIERS = [
     (0.30, 0.50, 0.20),   # $0.30-$0.50: Need 20%+ spike
     (0.50, 999, 0.15),    # $0.50+: Need 15%+ spike
 ]
+
+# Volume filter (ignore small trades)
+MIN_TRADE_VALUE = 5.00  # Ignore trades under $5 total value (e.g., 10 contracts @ $0.50)
 
 # Cooldown period in seconds (30 seconds)
 COOLDOWN_SECONDS = 30
@@ -176,7 +180,7 @@ def get_threshold_for_price(price: float) -> float:
             return threshold
     return 0.15  # Default fallback
 
-def send_alert(ticker: str, old_price: float, new_price: float, change_pct: float, context: Optional[str] = None):
+def send_alert(ticker: str, old_price: float, new_price: float, change_pct: float, volume: int = 0, context: Optional[str] = None):
     """Send spike alert to terminal and Slack."""
     print("\n" + "="*60)
     print("⚠️  SPIKE DETECTED!")
@@ -185,6 +189,8 @@ def send_alert(ticker: str, old_price: float, new_price: float, change_pct: floa
     print(f"Old:     ${old_price:.2f}")
     print(f"New:     ${new_price:.2f}")
     print(f"Change:  {change_pct:+.1%}")
+    if volume > 0:
+        print(f"Volume:  {volume} contracts")
     if context:
         print(f"Context: {context}")
     print("="*60 + "\n")
@@ -195,6 +201,8 @@ def send_alert(ticker: str, old_price: float, new_price: float, change_pct: floa
             f"*{ticker}*\n"
             f"${old_price:.2f} → ${new_price:.2f} ({change_pct:+.1%})\n"
         )
+        if volume > 0:
+            message += f"📊 Volume: {volume} contracts\n"
         if context:
             message += f"\n💡 {context}"
         
@@ -211,14 +219,22 @@ def on_message(ws, message):
         # ONLY track actual trades (executed transactions)
         # Orderbook deltas show individual orders at ANY price level, not the real market price
         if msg_type == "trade":
-            ticker = data.get("msg", {}).get("ticker")
+            ticker = data.get("msg", {}).get("market_ticker")  # Fixed: was "ticker"
             price = data.get("msg", {}).get("yes_price")
+            count = data.get("msg", {}).get("count", 0)  # Number of contracts traded
             
             if ticker and price is not None:
                 # Convert price from cents to dollars
                 price = price / 100.0
                 
-                print(f"[TRADE] {ticker}: ${price:.2f}")
+                # Calculate trade value (volume filter)
+                trade_value = price * count
+                
+                # Ignore small trades (likely noise)
+                if trade_value < MIN_TRADE_VALUE:
+                    return  # Skip this trade
+                
+                print(f"[TRADE] {ticker}: ${price:.2f} x{count} (${trade_value:.2f})")
                 
                 # Check for spike with price-tiered threshold
                 old_price = get_cached_price(ticker)
@@ -232,7 +248,7 @@ def on_message(ws, message):
                         if ENABLE_GOOGLE_SEARCH and abs(change_pct) >= AI_CONTEXT_THRESHOLD:
                             context = get_market_context(ticker, f"Price: ${price:.2f}", ENABLE_GOOGLE_SEARCH)
                         
-                        send_alert(ticker, old_price, price, change_pct, context)
+                        send_alert(ticker, old_price, price, change_pct, volume=count, context=context)
                         set_cooldown(ticker)
                 else:
                     # First time seeing this ticker - cache it
@@ -304,8 +320,9 @@ def on_open(ws):
         except Exception as e:
             print(f"  ⚠️  Error subscribing to {event_ticker}: {e}")
     
-    print(f"\n🎯 Monitoring {total_contracts} contracts with price-tiered thresholds:")
-    print(f"   $0.01-$0.10 → 100%+ | $0.10-$0.30 → 30%+ | $0.30-$0.50 → 20%+ | $0.50+ → 15%+")
+    print(f"\n🎯 Monitoring {total_contracts} contracts with smart filters:")
+    print(f"   Price tiers: $0.01-$0.10 → 100%+ | $0.10-$0.30 → 30%+ | $0.30-$0.50 → 20%+ | $0.50+ → 15%+")
+    print(f"   Volume filter: Ignoring trades under ${MIN_TRADE_VALUE:.2f}")
     print(f"   Cooldown: {COOLDOWN_SECONDS}s | Slack: {ENABLE_SLACK_ALERTS} | AI Context: {ENABLE_GOOGLE_SEARCH}\n")
 
 # ===== SIGNAL HANDLER =====
