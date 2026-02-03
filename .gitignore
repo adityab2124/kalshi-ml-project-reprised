@@ -4,5 +4,4 @@ private_key.pem
 *.pyc
 __pycache__/
 .DS_Store
-archive/
-archive/
+.env

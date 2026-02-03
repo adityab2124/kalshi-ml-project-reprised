@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -19,6 +17,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  trading_bot:
+    build: .
+    container_name: kalshi_bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: 1
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: kalshi
+      POSTGRES_PASSWORD: kalshi_secure_password
+      POSTGRES_DB: kalshi_trading
+    restart: unless-stopped
 
 volumes:
   postgres_data:

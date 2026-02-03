@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """
+
+THIS IS GONNA BE FOR THE ORDERBOOK, ON SPORTS MARKETS 
+
 Kalshi Liquidity Provision Bot - "Catch the Knife" Strategy
 
 CONCEPT:

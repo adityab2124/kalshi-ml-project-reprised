@@ -19,6 +19,7 @@ from cryptography.hazmat.backends import default_backend
 from typing import Dict, List, Optional
 from slack_notify import send_slack_message
 from google_context import get_market_context
+import db_postgres
 
 # Global WebSocket instance for signal handler
 ws_instance = None
@@ -34,11 +35,11 @@ KEY_ID = "cc76eee9-dba9-4bf2-a06f-eddf6a44a8e1"
 
 # Target markets to monitor (event tickers)
 TARGET_MARKETS = [
-    "KXTRUMPSAY-26JAN26",
-    "KXBERNIEMENTION-26JAN20",
+    "KXTRUMPSAY-26FEB02",       # Newest Trump Say series
     "KXTRUMPMENTION-26JAN21",
     "KXTRUMPMENTIONB-26JAN21",
-    "KXMAMDANIMENTION-26JAN24"
+    "KXTRUMPMENTIONB-26JAN28",  # Added: Weekly Trump Mention B (exp. Jan 28)
+    "KXTRUMPSAYMONTH-26FEB01"
 ]
 
 # Price-tiered spike thresholds (filters penny stock noise)
@@ -50,7 +51,7 @@ PRICE_TIERS = [
 ]
 
 # Volume filter (ignore small trades)
-MIN_TRADE_VALUE = 5.00  # Ignore trades under $5 total value (e.g., 10 contracts @ $0.50)
+MIN_TRADE_VALUE = 0.00  # TEMPORARY: Record all trades to verify DB is working
 
 # Cooldown period in seconds (30 seconds)
 COOLDOWN_SECONDS = 30
@@ -195,6 +196,13 @@ def send_alert(ticker: str, old_price: float, new_price: float, change_pct: floa
         print(f"Context: {context}")
     print("="*60 + "\n")
     
+    # Record to PostgreSQL
+    try:
+        if db_postgres.batch_manager:
+            db_postgres.batch_manager.add_spike(ticker, old_price, new_price, change_pct, volume)
+    except Exception as e:
+        print(f"Error logging spike to DB: {e}")
+    
     if ENABLE_SLACK_ALERTS:
         message = (
             f"🚨 *SPIKE ALERT* 🚨\n"
@@ -235,6 +243,13 @@ def on_message(ws, message):
                     return  # Skip this trade
                 
                 print(f"[TRADE] {ticker}: ${price:.2f} x{count} (${trade_value:.2f})")
+                
+                # Record to PostgreSQL
+                try:
+                    if db_postgres.batch_manager:
+                        db_postgres.batch_manager.add_history(ticker, price, count, data.get("msg", {}).get("ts"))
+                except Exception as e:
+                    print(f"Error logging trade to DB: {e}")
                 
                 # Check for spike with price-tiered threshold
                 old_price = get_cached_price(ticker)
@@ -304,6 +319,17 @@ def on_open(ws):
             for market in markets:
                 ticker = market.get('ticker')
                 if ticker:
+                    # Update Metadata (storing human-readable title)
+                    try:
+                        from dateutil.parser import parse
+                        close_time = parse(market.get('close_time'))
+                        # Subtitle is usually the specific word like "Economy"
+                        # Title is usually the full question
+                        market_title = market.get('subtitle') or market.get('title')
+                        db_postgres.upsert_metadata(ticker, event_ticker, close_time, title=market_title)
+                    except Exception as e:
+                        print(f"  ⚠️  Error saving metadata for {ticker}: {e}")
+
                     subscribe_msg = {
                         "id": 1,
                         "cmd": "subscribe",
@@ -333,6 +359,7 @@ def signal_handler(sig, frame):
     print("\n\n⚠️  Interrupt received, shutting down...")
     if ws_instance:
         ws_instance.close()
+    db_postgres.shutdown_database()
     sys.exit(0)
 
 # ===== MAIN =====
@@ -350,6 +377,7 @@ def main():
     
     # Initialize database
     init_db()
+    db_postgres.initialize_database()
     
     # Load credentials
     try:
@@ -376,8 +404,10 @@ def main():
             
             ws_instance.run_forever()
             
-            # If run_forever exits normally, break (don't reconnect)
-            break
+            # If we reach here, the connection closed. 
+            # We want to loop back to the top and reconnect, not break.
+            print("WebSocket connection closed. Reconnecting...")
+            time.sleep(5)
             
         except KeyboardInterrupt:
             print("\n\nShutting down...")

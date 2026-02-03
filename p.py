@@ -184,6 +184,8 @@ class ExchangeClient(KalshiClient):
                         series_ticker:Optional[str]=None,
                         max_close_ts:Optional[int]=None,
                         min_close_ts:Optional[int]=None,
+                        min_settled_ts:Optional[str]=None,
+                        max_settled_ts:Optional[str]=None,
                         status:Optional[str]=None,
                         tickers:Optional[str]=None,
                             ):
@@ -202,8 +204,13 @@ class ExchangeClient(KalshiClient):
         return dictr
 
     def get_event(self,
-                    event_ticker:str):
-        dictr = self.get(self.events_url+'/'+event_ticker)
+                    event_ticker:str,
+                    with_nested_markets:Optional[bool]=None):
+        url = self.events_url+'/'+event_ticker
+        params = {}
+        if with_nested_markets:
+            params['with_nested_markets'] = 'true'
+        dictr = self.get(url, params=params)
         return dictr
 
     def get_series(self,
