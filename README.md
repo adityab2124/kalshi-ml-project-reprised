@@ -49,3 +49,5 @@ Store price movements and outcomes in SQL for analysis and ML training
 Improve Slack alerts to reduce noise and surface only actionable events
 
 The long-term goal is an intelligent, read-only trading assistant that surfaces high-signal Kalshi opportunities before they fully reprice.
+
+tracking my own bets here: https://docs.google.com/spreadsheets/d/1AQPP2YhrUSg8QKIjEj0HuEHBu-lzyL1Y/edit?gid=273245757#gid=273245757
